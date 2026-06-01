@@ -1,0 +1,12 @@
+.env
+*.env
+.env
+audit.log
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tmp/
+vendor/
+EOF

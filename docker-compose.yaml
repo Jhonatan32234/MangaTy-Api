@@ -1,0 +1,32 @@
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-mangaty_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # ─── AGREGAMOS EL HEALTHCHECK PARA POSTGRES ───
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-mangaty_db}"]
+      interval: 5s     # Cada cuánto tiempo Docker revisará la BD
+      timeout: 5s      # Cuánto tiempo máximo esperará por respuesta
+      retries: 5       # Cuántos intentos fallidos antes de marcarla como "unhealthy"
+      start_period: 5s # Tiempo de gracia inicial mientras Postgres arranca por primera vez
+
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    # ─── MODIFICAMOS EL DEPENDS_ON PARA QUE ESPERE AL HEALTHCHECK ───
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+
+volumes:
+  postgres_data:

@@ -1,0 +1,1110 @@
+openapi: 3.0.3
+info:
+  title: Mangaty API
+  description: |
+    API para la plataforma de cómics Mangaty.
+    
+    ## Características:
+    - Autenticación segura con JWT
+    - Sistema de roles flexible (lector → autor → admin)
+    - Microeconomía con TyCoins
+    - Subida de imágenes con Cloudinary
+    - Sistema de recomendaciones con IA
+    
+    ## Roles del sistema:
+    - **lector**: Rol por defecto. Lee cómics y desbloquea capítulos
+    - **autor**: Puede crear cómics y publicar capítulos. Cualquier lector puede subir contenido
+    - **administrador**: Control total. Asigna roles y elimina contenido
+    
+    ## Flujo de autenticación:
+    1. Registrar usuario → `POST /api/v1/auth/register`
+    2. Iniciar sesión → `POST /api/v1/auth/login`
+    3. Clic en **Authorize** y pegar: `Bearer <token>`
+  version: 1.0.0
+  contact:
+    name: Mangaty Team
+    email: support@mangaty.com
+
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+  - url: https://api.mangaty.com
+    description: Producción
+
+tags:
+  - name: Auth
+    description: Autenticación y registro
+  - name: User
+    description: Perfil y gestión de roles
+  - name: Admin
+    description: Administración del sistema
+  - name: Wallet
+    description: Billetera y TyCoins
+  - name: Comics
+    description: Catálogo de cómics
+  - name: Chapters
+    description: Capítulos y lectura
+  - name: Upload
+    description: Subida de imágenes (Cloudinary)
+  - name: Recommendations
+    description: Recomendaciones IA
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT del login. Formato: `Bearer <token>`
+        El token incluye los roles del usuario
+
+  schemas:
+    # ============ STANDARD ============
+    StandardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    # ============ AUTH ============
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: nuevo_lector
+        email:
+          type: string
+          format: email
+          example: usuario@mangaty.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: MiPassword123
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginData:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIs...
+        expires_in:
+          type: string
+          example: 24h
+
+    # ============ USER ============
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["lector", "autor"]
+        created_at:
+          type: string
+          format: date-time
+
+    RoleResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Nuevo token con roles actualizados
+
+    # ============ ADMIN ============
+    AssignRoleRequest:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: ID del usuario al que asignar el rol
+        role:
+          type: string
+          enum: [autor, administrador]
+          description: Rol a asignar
+
+    # ============ WALLET ============
+    WalletData:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        balance:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          example: TyCoins
+
+    UnlockChapterRequest:
+      type: object
+      required: [chapter_id]
+      properties:
+        chapter_id:
+          type: string
+          format: uuid
+
+    # ============ COMICS ============
+    CreateComicRequest:
+      type: object
+      required: [title, synopsis, category_ids]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Cazadores de Niebla
+        synopsis:
+          type: string
+          example: En una ciudad flotante donde el sol nunca se pone...
+        category_ids:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+          example: [2, 3]
+          description: IDs de categorías (obtenidos de GET /api/v1/categories)
+
+
+    ComicDetail:
+      type: object
+      properties:
+        comic_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        author_name:
+          type: string
+        synopsis:
+          type: string
+        category_name:
+          type: string
+          example: "Fantasía, Sci-Fi"
+        cover_url:
+          type: string
+          format: uri
+          description: URL de la portada del cómic
+        cover_thumbnail:
+          type: string
+          format: uri
+          description: Thumbnail 200x300 de la portada
+        chapters_count:
+          type: integer
+        published_at:
+          type: string
+          format: date-time
+
+    # ============ CHAPTERS ============
+    CreateChapterRequest:
+      type: object
+      required: [chapter_number, title, price_tycoins]
+      properties:
+        chapter_number:
+          type: integer
+          minimum: 1
+          example: 1
+        title:
+          type: string
+          example: El Comienzo
+        price_tycoins:
+          type: integer
+          minimum: 0
+          example: 10
+          description: 0 = gratuito
+
+    ChapterItem:
+      type: object
+      properties:
+        chapter_id:
+          type: string
+          format: uuid
+        chapter_number:
+          type: integer
+        title:
+          type: string
+        price_tycoins:
+          type: integer
+        is_unlocked:
+          type: boolean
+
+    ListChaptersData:
+      type: object
+      properties:
+        comic_id:
+          type: string
+          format: uuid
+        total_chapters:
+          type: integer
+        chapters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChapterItem'
+
+    ReadChapterData:
+      type: object
+      properties:
+        status:
+          type: string
+          example: granted
+        chapter_id:
+          type: string
+          format: uuid
+        pages_count:
+          type: integer
+        pages:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    PaginationMeta:
+         type: object
+         properties:
+           page:
+             type: integer
+             example: 1
+           per_page:
+             type: integer
+             example: 20
+           total:
+             type: integer
+             example: 45
+           total_pages:
+             type: integer
+             example: 3
+           has_more:
+             type: boolean
+             example: true
+
+    # ============ UPLOAD ============
+    ComicImage:
+      type: object
+      properties:
+        thumbnail:
+          type: string
+          format: uri
+          description: 200x300
+        medium:
+          type: string
+          format: uri
+          description: 400x600
+        high:
+          type: string
+          format: uri
+          description: 800x1200
+        original:
+          type: string
+          format: uri
+
+    ChapterPage:
+      type: object
+      properties:
+        page_number:
+          type: integer
+        image_url:
+          type: string
+          format: uri
+        secure_url:
+          type: string
+          format: uri
+        width:
+          type: integer
+        height:
+          type: integer
+
+    UploadPagesData:
+      type: object
+      properties:
+        comic_id:
+          type: string
+          format: uuid
+        chapter_number:
+          type: integer
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChapterPage'
+        total_pages:
+          type: integer
+
+    # ============ RECOMMENDATIONS ============
+    Recommendation:
+      type: object
+      properties:
+        comic_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        author:
+          type: string
+        match_percentage:
+          type: number
+          format: float
+          example: 94.5
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: Fantasía
+        description:
+          type: string
+          example: Mundos mágicos y criaturas legendarias
+
+    RecommendationsData:
+      type: object
+      properties:
+        items_count:
+          type: integer
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+
+    # ============ ERROR ============
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Sin permisos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Datos inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+paths:
+  # ============ AUTH ============
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Registrar usuario
+      description: |
+        Crea una cuenta nueva en la que puedes subir o leer el contenido.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              lector:
+                value:
+                  username: nuevo_lector
+                  email: lector@demo.com
+                  password: Demo123456
+      responses:
+        '201':
+          description: Usuario registrado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user_id:
+                            type: string
+                            format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      description: Obtiene token JWT con los roles del usuario
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: lector@demo.com
+              password: Demo123456
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============ USER ============
+  /api/v1/user/profile:
+    get:
+      tags: [User]
+      summary: Ver perfil
+      description: Obtiene perfil con roles actuales
+      operationId: getProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserProfile'
+
+
+  # ============ ADMIN ============
+  /api/v1/admin/assign-role:
+    post:
+      tags: [Admin]
+      summary: Asignar rol a usuario
+      description: Solo **administradores**. Asigna rol autor o administrador a otro usuario
+      operationId: assignRole
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoleRequest'
+            example:
+              user_id: "550e8400-e29b-41d4-a716-446655440000"
+              role: "autor"
+      responses:
+        '200':
+          description: Rol asignado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============ WALLET ============
+  /api/v1/wallet/balance:
+    get:
+      tags: [Wallet]
+      summary: Consultar saldo
+      operationId: getBalance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Saldo en TyCoins
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/WalletData'
+
+  /api/v1/wallet/unlock-chapter:
+    post:
+      tags: [Wallet]
+      summary: Desbloquear capítulo
+      description: Paga con TyCoins para desbloquear un capítulo
+      operationId: unlockChapter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockChapterRequest'
+      responses:
+        '200':
+          description: Capítulo desbloqueado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+        '400':
+          description: Saldo insuficiente
+          $ref: '#/components/responses/BadRequest'
+
+  # ============ COMICS ============
+
+  /api/v1/comics/{comic_id}:
+    get:
+      tags: [Comics]
+      summary: Ver cómic
+      operationId: getComic
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalles del cómic
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ComicDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Admin]
+      summary: Eliminar cómic
+      description: Solo **administradores**. Elimina cómic y sus imágenes
+      operationId: deleteComic
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cómic eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============ UPLOAD ============
+  /api/v1/comics/{comic_id}/cover:
+    post:
+      tags: [Upload]
+      summary: Subir portada
+      description: |
+        Sube la portada del cómic a Cloudinary.
+        Formatos: JPG, PNG, WebP (máx 10MB)
+      operationId: uploadCover
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [cover]
+              properties:
+                cover:
+                  type: string
+                  format: binary
+                  description: Imagen de portada
+      responses:
+        '201':
+          description: Portada subida
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ComicImage'
+
+  /api/v1/comics/{comic_id}/chapters/{chapter_number}/pages:
+    post:
+      tags: [Upload]
+      summary: Subir páginas
+      description: |
+        Sube páginas de un capítulo a Cloudinary.
+        Máximo 50 páginas. Formatos: JPG, PNG, WebP (máx 15MB c/u)
+      operationId: uploadChapterPages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: chapter_number
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pages]
+              properties:
+                pages:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Múltiples archivos de páginas
+      responses:
+        '201':
+          description: Páginas subidas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UploadPagesData'
+
+  # ============ CHAPTERS ============
+  /api/v1/comics/{comic_id}/chapters:
+    post:
+      tags: [Chapters]
+      summary: Crear capítulo (con o sin páginas)
+      description: Crea un capítulo. Soporta JSON simple o multipart con páginas.
+      operationId: createChapter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChapterRequest'
+            examples:
+              gratis:
+                value:
+                  chapter_number: 1
+                  title: "Prólogo"
+                  price_tycoins: 0
+              pago:
+                value:
+                  chapter_number: 2
+                  title: "La Tormenta"
+                  price_tycoins: 10
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  type: string
+                  description: JSON con chapter_number, title, price_tycoins
+                  example: '{"chapter_number":1,"title":"El Comienzo","price_tycoins":10}'
+                pages:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Páginas del capítulo (opcional)
+      responses:
+        '201':
+          description: Capítulo creado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          chapter_id:
+                            type: string
+                            format: uuid
+                          chapter_number:
+                            type: integer
+                          pages:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/ChapterPage'
+                          total_pages:
+                            type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Chapters]
+      summary: Listar capítulos
+      description: Muestra estado de desbloqueo según el usuario
+      operationId: listChapters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comic_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de capítulos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ListChaptersData'
+
+  /api/v1/chapters/{chapter_id}/read:
+    get:
+      tags: [Chapters]
+      summary: Leer capítulo
+      description: |
+        Devuelve URLs de páginas desde Cloudinary.
+        Capítulos gratuitos: acceso inmediato.
+        Capítulos de pago: requiere desbloqueo previo.
+      operationId: readChapter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chapter_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: URLs de páginas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ReadChapterData'
+        '403':
+          description: Capítulo no desbloqueado
+          $ref: '#/components/responses/Forbidden'
+
+  # ============ RECOMMENDATIONS ============
+  /api/v1/catalog/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: Recomendaciones IA
+      operationId: getRecommendations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Recomendaciones generadas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RecommendationsData'
+
+    # ============ CATEGORIES ============
+  /api/v1/categories:
+    get:
+      tags: [Comics]
+      summary: Listar categorías
+      description: |
+        Obtiene todas las categorías disponibles para cómics.
+      operationId: listCategories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de categorías
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+              example:
+                success: true
+                message: "Categorías obtenidas exitosamente"
+                data:
+                  - id: 1
+                    name: "Acción"
+                    description: "Historias con mucha adrenalina y combates"
+                  - id: 2
+                    name: "Fantasía"
+                    description: "Mundos mágicos y criaturas legendarias"
+                  - id: 3
+                    name: "Sci-Fi"
+                    description: "Tecnología avanzada y viajes espaciales"
+                  - id: 4
+                    name: "Romance"
+                    description: "Historias centradas en relaciones amorosas"
+                  - id: 5
+                    name: "Terror"
+                    description: "Contenido diseñado para asustar o inquietar"
+                timestamp: "2026-05-31T18:00:00Z"
+
+  # ============ COMICS BY CATEGORY ============
+  /api/v1/comics:
+    post:
+      tags: [Comics]
+      summary: Crear cómic (con o sin portada)
+      description: |
+        Crea un nuevo cómic. Soporta dos modos:
+        - Modo JSON: Content-Type application/json
+        - Modo Multipart: Content-Type multipart/form-data (permite subir portada)
+      operationId: createComic
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComicRequest'
+            examples:
+              sin_portada:
+                value:
+                  title: "Crónicas del Cielo Eterno"
+                  synopsis: "En un mundo donde las islas flotan..."
+                  category_ids: [2, 3]
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  type: string
+                  description: JSON con title, synopsis y category_ids
+                  example: '{"title":"Cómic con Portada","synopsis":"Historia épica","category_ids":[2,3]}'
+                cover:
+                  type: string
+                  format: binary
+                  description: Imagen de portada (opcional, JPG/PNG/WebP, máx 10MB)
+      responses:
+        '201':
+          description: Cómic creado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          comic_id:
+                            type: string
+                            format: uuid
+                          cover:
+                            $ref: '#/components/schemas/ComicImage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Comics]
+      summary: Listar cómics (con filtros y portada)
+      description: |
+        Lista cómics con filtros por categorías y paginación.
+        
+        **Filtros:**
+        - `category_id=2` - Filtrar por una categoría
+        - `category_id=2&category_id=3` - Filtrar por múltiples categorías
+        - `category_ids=2,3` - Alternativa con comas
+        
+        **Respuesta incluye:**
+        - Portada del cómic (`cover_url`, `cover_thumbnail`)
+        - Nombres de categorías
+        - Conteo de capítulos
+      operationId: listComics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filtrar por categoría (puede repetirse)
+          example: 2
+        - name: category_ids
+          in: query
+          required: false
+          schema:
+            type: string
+          description: IDs separados por coma (alternativa)
+          example: "2,3"
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          example: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          example: 20
+      responses:
+        '200':
+          description: Lista paginada de cómics con portadas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StandardResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ComicDetail'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+              example:
+                success: true
+                message: "Cómics obtenidos exitosamente"
+                data:
+                  - comic_id: "c1b2f9a3-4455-4d3e-8e5f-1a2b3c4d5e6f"
+                    title: "Cazadores de Niebla"
+                    author_name: "StudioGraph"
+                    synopsis: "En una ciudad flotante..."
+                    category_name: "Fantasía, Sci-Fi"
+                    cover_url: "https://res.cloudinary.com/.../cover.jpg"
+                    cover_thumbnail: "https://res.cloudinary.com/.../c_fill,h_300,w_200/cover.jpg"
+                    chapters_count: 12
+                    published_at: "2026-05-20T18:30:00Z"
+                meta:
+                  page: 1
+                  per_page: 20
+                  total: 45
+                  total_pages: 3
+                  has_more: true
+                timestamp: "2026-05-31T18:00:00Z"
+security: []
