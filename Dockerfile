@@ -13,7 +13,6 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 COPY --from=builder /app/mangaty-api .
-COPY --from=builder /app/.env .
 COPY --from=builder /app/docs ./docs
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
