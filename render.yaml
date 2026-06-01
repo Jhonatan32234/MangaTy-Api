@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mangaty-api
+    env: go
+    region: oregon
+    plan: free
+    buildCommand: go build -o mangaty-api ./cmd/api
+    startCommand: ./mangaty-api
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+    autoDeploy: true
+    healthCheckPath: /health
