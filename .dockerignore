@@ -1,0 +1,14 @@
+.env
+audit.log
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tmp/
+vendor/
+.git/
+.gitignore
+README.md
+*.ps1
+*.sh
